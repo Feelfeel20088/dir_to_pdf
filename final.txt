@@ -1,0 +1,2468 @@
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServiceStatus/ServiceStatusEvent.py
+
+
+from pydantic import BaseModel
+from .bases import ServiceStatus, Ext
+
+class StatusData(BaseModel):
+    type: str
+    status: str
+
+class ServiceStatusEvent(ServiceStatus):
+    ext: Ext
+    data: StatusData
+    channel: str = "/service/status"
+
+
+    async def handle(self, instance):
+        pass
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServiceStatus/bases.py
+
+
+from ..bases import Event, Ext
+
+class ServiceStatus(Event):
+    pass
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServiceStatus/DisconnectEvent.py
+
+
+from pydantic import BaseModel
+from .bases import ServiceStatus, Ext
+from ...Kahoot_Bot.exceptions import HostDisconnectError
+from ....config.logger import logger
+
+
+class Data(BaseModel):
+    reason: str
+    type: str
+    status: str
+
+class DisconnectEvent(ServiceStatus):
+    ext: Ext
+    data: Data
+    channel: str = "/service/status"
+
+    async def handle(self, instance):
+        if self.data.reason == "disconnect" and self.data.status == "MISSING":
+            raise HostDisconnectError("Host disconnect from game.")
+        logger.warning(f"unknown value in {type(DisconnectEvent)} disconnect: {self.data.reason}, status: {self.data.status} ")
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServicePlayer/ServicePlayerEventV3.py
+
+
+from pydantic import BaseModel, model_validator
+from typing import Any, Dict, List, Optional
+from .bases import ServicePlayer, Ext
+import orjson
+
+
+
+class Content(BaseModel):
+    playerName: Optional[str] = None
+    hostPrimaryUsage: Optional[str] = None
+    hostPrimaryUsageType: Optional[str] = None
+    hostIsPublisher: Optional[bool] = None
+    enableBasicPostGameSignupFlow: Optional[bool] = None
+    trainingContentId: Optional[str] = None
+    iosLiveActivityId: Optional[str] = None
+    youtubeAPIKey: Optional[str] = None
+
+
+class Data(BaseModel):
+    gameid: str
+    host: str
+    id: int
+    type: str
+    content: Content  
+    cid: str
+    trainingContentId: Optional[str] = None
+    hostPrimaryUsage: Optional[str] = None
+    hostPrimaryUsageType: Optional[str] = None
+    youtubeAPIKey: Optional[str] = None
+    iosLiveActivityId: Optional[str] = None
+    playerName: Optional[str] = None
+    enableBasicPostGameSignupFlow: Optional[bool] = None
+    hostIsPublisher: Optional[bool] = None
+
+
+class ServicePlayerEventV3(ServicePlayer):
+    ext: Ext
+    data: Data
+    channel: str = "/service/player"
+
+    @model_validator(mode='before')
+    def check_required_fields(cls, values: dict) -> dict:
+        content = values.get('data', {}).get('content', None)
+        if isinstance(content, str):
+            try:
+                parsed_content = orjson.loads(content)
+                values["data"]["content"] = Content(**parsed_content)
+            except orjson.JSONDecodeError:
+                raise ValueError(f"Failed to parse content as JSON: {content}")
+        return values
+    
+    async def handle(self, instance):
+        pass
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServicePlayer/bases.py
+
+
+from ..bases import Event, Ext
+
+
+class ServicePlayer(Event):
+    pass
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServicePlayer/ServicePlayerEventV4.py
+
+
+from pydantic import BaseModel, model_validator
+from typing import List, Optional
+from .bases import ServicePlayer, Ext
+import orjson
+
+class AvailableCollaborations(BaseModel):
+    isAutoAssign: bool
+    canRename: bool
+    data: List
+    collaborationNameLocale: str
+
+class Content(BaseModel):
+    data: dict
+    stableIdentifier: str
+    isHighContrast: bool
+    teamMembers: List
+    loginState: int
+    didControllerLeave: bool
+    avatarTimestamp: Optional[int] = None
+    wasControllerKicked: bool
+    state: int
+    availableCollaborations: AvailableCollaborations
+    chosenCollaborationIndex: int
+    kahootLangIsRTL: bool
+    canChangeAvatar: bool
+    youtubeAPIKey: str
+    userReactionsEnabled: bool
+    islandData: Optional[dict] = None
+    audienceQuestionsData: Optional[dict] = None
+
+class Data(BaseModel):
+    gameid: str
+    host: str
+    id: int
+    type: str
+    content: Content
+    cid: str
+
+class ServicePlayerEventV4(ServicePlayer):
+    ext: Ext
+    data: Data
+    channel: str = "/service/player"
+    
+    @model_validator(mode='before')
+    def check_required_fields(cls, values: dict) -> dict:
+        content = values.get('data', {}).get('content', None)
+        if isinstance(content, str):
+            try:
+                parsed_content = orjson.loads(content)
+                values["data"]["content"] = Content(**parsed_content)
+            except orjson.JSONDecodeError:
+                raise ValueError(f"Failed to parse content as JSON: {content}")
+        return values
+    
+    async def handle(self, instance):
+        pass
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServicePlayer/KickedFromGame.py
+
+
+from pydantic import BaseModel, model_validator
+from .bases import ServicePlayer, Ext
+import orjson
+from ...Kahoot_Bot.exceptions import KickedFromGameError, TooManyPlayersError
+from ....config.logger import logger
+
+class Content(BaseModel):
+    kickCode: int
+
+class Data(BaseModel):
+    gameid: str
+    host: str
+    id: int
+    type: str
+    content: Content
+    cid: str
+
+class KickedFromGame(ServicePlayer):
+    ext: Ext
+    data: Data
+    channel: str = "/service/player"
+
+    @model_validator(mode='before')
+    def check_required_fields(cls, values: dict) -> dict:
+        content = values.get('data', {}).get('content', None)
+        if isinstance(content, str):
+            try:
+                parsed_content = orjson.loads(content)
+                values["data"]["content"] = Content(**parsed_content)
+            except orjson.JSONDecodeError:
+                raise ValueError(f"Failed to parse content as JSON: {content}")
+        return values
+    
+    
+    
+    async def handle(self, instance):
+        if self.data.content.kickCode == 1:
+            raise KickedFromGameError("Host kicked bot from game, rejoining...")
+
+        if self.data.content.kickCode == 2:
+            raise TooManyPlayersError("Bot could not join game as the player limit has been reached.")
+        
+        logger.warning(f"got unknown kickcode in {type(KickedFromGame)} code: {self.data.content.kickCode}")
+
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServicePlayer/ServicePlayerEvent.py
+
+
+from pydantic import BaseModel, model_validator
+from .bases import ServicePlayer, Ext
+import orjson
+
+class Content(BaseModel):
+    playerName: str
+    hostPrimaryUsage: str
+    hostPrimaryUsageType: str
+    hostIsPublisher: bool
+    enableBasicPostGameSignupFlow: bool
+    trainingContentId: str
+    iosLiveActivityId: str
+    youtubeAPIKey: str
+
+class Data(BaseModel):
+    gameid: str
+    host: str
+    id: int
+    type: str
+    content: str
+    cid: str
+
+class ServicePlayerEvent(ServicePlayer):
+    ext: Ext
+    data: Data
+    channel: str = "/service/player"
+
+    @model_validator(mode='before')
+    def check_required_fields(cls, values: dict) -> dict:
+        content = values.get('data', {}).get('content', None)
+        if isinstance(content, str):
+            try:
+                parsed_content = orjson.loads(content)
+                values["data"]["content"] = Content(**parsed_content)
+            except orjson.JSONDecodeError:
+                raise ValueError(f"Failed to parse content as JSON: {content}")
+        return values
+    
+
+    async def handle(self, instance):
+        pass
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServicePlayer/PreGameBlock.py
+
+
+from typing import List
+from pydantic import BaseModel, model_validator
+from .bases import ServicePlayer, Ext
+import orjson
+
+class Video(BaseModel):
+    startTime: int
+    endTime: int
+    service: str
+    fullUrl: str
+
+
+class ImageMetadata(BaseModel):
+    id: str
+    altText: str
+    contentType: str
+    origin: str
+    externalRef: str
+    resources: str
+    width: int
+    height: int
+
+
+class Content(BaseModel):
+    gameBlockIndex: int
+    totalGameBlockCount: int
+    extensiveMode: bool
+    type: str
+    timeRemaining: int
+    timeAvailable: int
+    numberOfAnswersAllowed: int
+    currentQuestionAnswerCount: int
+    video: Video
+    image: str
+    imageMetadata: ImageMetadata
+    media: List
+    questionRestricted: bool
+    getReadyTimeAvailable: int
+    getReadyTimeRemaining: int
+    questionIndex: int
+    gameBlockType: str
+
+
+class Data(BaseModel):
+    gameid: str
+    id: int
+    type: str
+    content: Content
+
+
+class PreGameBLock(ServicePlayer):
+    ext: Ext
+    data: Data
+    channel: str = "/service/player"
+
+    @model_validator(mode='before')
+    def check_required_fields(cls, values: dict) -> dict:
+        content = values.get('data', {}).get('content', None)
+        if isinstance(content, str):
+            try:
+                parsed_content = orjson.loads(content)
+                values["data"]["content"] = Content(**parsed_content)
+            except orjson.JSONDecodeError:
+                raise ValueError(f"Failed to parse content as JSON: {content}")
+        return values
+    
+    
+    async def handle(self, instance):
+        pass
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServicePlayer/ServicePlayerEventV2.py
+
+
+from pydantic import BaseModel, model_validator
+from typing import Any, Dict, List, Optional
+from .bases import ServicePlayer, Ext
+import orjson
+
+
+class AvailableCollaborations(BaseModel):
+    isAutoAssign: bool
+    canRename: bool
+    data: List[Any]
+    collaborationNameLocale: str
+
+class Content(BaseModel):
+    data: Dict[str, Any]
+    stableIdentifier: str
+    isHighContrast: bool
+    teamMembers: List[Any]
+    loginState: int
+    didControllerLeave: bool
+    avatarTimestamp: Optional[Any]  
+    wasControllerKicked: bool
+    state: int
+    availableCollaborations: AvailableCollaborations
+    chosenCollaborationIndex: int
+    kahootLangIsRTL: bool
+    canChangeAvatar: bool
+    youtubeAPIKey: str
+    userReactionsEnabled: bool
+    islandData: Optional[Any]  
+    audienceQuestionsData: Optional[Any]
+
+class Data(BaseModel):
+    gameid: str
+    host: str
+    id: int
+    type: str
+    content: Content
+    cid: str
+    trainingContentId: Optional[str] = None  
+    hostPrimaryUsage: Optional[str] = None 
+    hostPrimaryUsageType: Optional[str] = None 
+    youtubeAPIKey: Optional[str] = None 
+    iosLiveActivityId: Optional[str] = None 
+    playerName: Optional[str] = None  
+    enableBasicPostGameSignupFlow: Optional[bool] = None  
+    hostIsPublisher: Optional[bool] = None  
+
+class ServicePlayerEventV2(ServicePlayer):
+    ext: Ext
+    data: Data
+    channel: str = "/service/player"
+
+
+    @model_validator(mode='before')
+    def check_required_fields(cls, values: dict) -> dict:
+        content = values.get('data', {}).get('content', None)
+        if isinstance(content, str):
+            try:
+                parsed_content = orjson.loads(content)
+                values["data"]["content"] = Content(**parsed_content)
+            except orjson.JSONDecodeError:
+                raise ValueError(f"Failed to parse content as JSON: {content}")
+        return values
+    
+    async def handle(self, instance):
+        pass
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServicePlayer/GameBlock.py
+
+
+from pydantic import BaseModel, model_validator
+from .bases import ServicePlayer, Ext
+from typing import List, Optional
+import orjson
+
+
+class Video(BaseModel):
+    startTime: int
+    endTime: int
+    service: str
+    fullUrl: str
+
+
+class ImageMetadata(BaseModel):
+    id: str
+    altText: str
+    contentType: str
+    origin: str
+    externalRef: str
+    resources: str
+    width: int
+    height: int
+
+
+class Content(BaseModel):
+    gameBlockIndex: int
+    totalGameBlockCount: int
+    extensiveMode: bool
+    type: str
+    timeRemaining: int
+    timeAvailable: int
+    numberOfAnswersAllowed: int
+    currentQuestionAnswerCount: int
+    video: Optional[Video] = None
+    image: Optional[str] = None
+    imageMetadata: Optional[ImageMetadata] = None
+    media: Optional[List[Optional[str]]] = None
+
+
+class Data(BaseModel):
+    gameid: str
+    id: int
+    type: str
+    content: Content
+
+
+class GameBlock(ServicePlayer):
+    ext: Ext
+    data: Data
+    channel: str = "/service/player"
+
+    @model_validator(mode='before')
+    def check_required_fields(cls, values: dict) -> dict:
+        content = values.get('data', {}).get('content', None)
+        if isinstance(content, str):
+            try:
+                parsed_content = orjson.loads(content)
+                values["data"]["content"] = Content(**parsed_content)
+            except orjson.JSONDecodeError:
+                raise ValueError(f"Failed to parse content as JSON: {content}")
+        return values
+    
+
+    async def handle(self, instance):
+        await instance.answerQuestion(self.data.content.numberOfAnswersAllowed, self.data.content.type)
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServicePlayer/GameMessage.py
+
+
+from typing import List
+from .bases import ServicePlayer, Ext
+from pydantic import BaseModel, model_validator
+import orjson
+
+class UpcomingGameBlockData(BaseModel):
+    type: str
+    layout: str
+    pointsMultiplier: int = None
+
+class Content(BaseModel):
+    extensiveMode: bool
+    gameBlockCount: int
+    upcomingGameBlockData: List[UpcomingGameBlockData]
+    gameId: str
+
+class Data(BaseModel):
+    gameid: str
+    id: int
+    type: str
+    content: Content 
+
+class GameMessage(ServicePlayer):
+    ext: Ext
+    data: Data
+    channel: str = "/service/player"
+
+    @model_validator(mode='before')
+    def check_required_fields(cls, values: dict) -> dict:
+        content = values.get('data', {}).get('content', None)
+        if isinstance(content, str):
+            try:
+                parsed_content = orjson.loads(content)
+                values["data"]["content"] = Content(**parsed_content)
+            except orjson.JSONDecodeError:
+                raise ValueError(f"Failed to parse content as JSON: {content}")
+        return values
+    
+
+    async def handle(self, instance):
+        pass
+
+    
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/bases.py
+
+
+from pydantic import BaseModel
+
+class Event(BaseModel):
+
+    channel: str
+
+    async def handle(self, instance):
+        raise NotImplementedError(f"Handle not implemented for subclass {self.__class__.__name__}!")
+    
+class Ext(BaseModel):
+    timetrack: int
+
+
+
+
+
+    
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServiceController/ServiceControllerEventV2.py
+
+
+from .bases import ServiceController, Ext
+
+class ServiceControllerEventV2(ServiceController):
+    channel: str = "/service/controller"
+    ext: Ext
+    id: str
+    successful: bool
+
+    async def handle(self, instance):
+        pass
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServiceController/bases.py
+
+
+from ..bases import Event, Ext
+
+class ServiceController(Event):
+    pass
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServiceController/ServiceControllerEvent.py
+
+
+from .bases import ServiceController, Ext
+from pydantic import BaseModel
+
+class Data(BaseModel):
+    type: str
+    cid: str
+
+class ServiceControllerEvent(ServiceController):
+    channel: str = "/service/controller"
+    ext: Ext
+    data: Data
+
+    async def handle(self, instance):
+        pass
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/ServiceController/SessionErrorEvent.py
+
+
+from pydantic import BaseModel
+from .bases import ServiceController, Ext
+from ...Kahoot_Bot.exceptions import SessionNotFoundError
+from ....config.logger import logger
+
+class Data(BaseModel):
+    description: str
+    type: str
+    error: str
+
+class SessionErrorEvent(ServiceController):
+    ext: Ext
+    data: Data
+    channel: str = "/service/controller"
+
+    async def handle(self, instance):
+        if self.data.type == "loginResponse" and self.data.error == "NONEXISTING_SESSION":
+            raise SessionNotFoundError(f"Game not found: type {self.data.type}, error {self.data.error}")
+        logger.error(f"Unknown values. type: {self.data.type}, error: {self.data.error} in {type(SessionErrorEvent)}")
+        
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/MetaConnect/MetaConnectEventV2.py
+
+
+from .bases import MetaConnect, Ext 
+
+
+class MetaConnectEventV2(MetaConnect):
+    channel: str = "/meta/connect"
+    ext: Ext
+    id: str
+    successful: bool
+
+    async def handle(self, instance):
+        pass
+
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/MetaConnect/bases.py
+
+
+from ..bases import Event
+from pydantic import BaseModel
+
+class MetaConnect(Event):
+    pass
+
+# diffrent Ext model becuse instead of timetrack we have 'act'
+class Ext(BaseModel):
+    ack: int
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/MetaConnect/MetaConnectEvent.py
+
+
+from pydantic import BaseModel
+from .bases import MetaConnect, Ext
+
+class Advice(BaseModel):
+    interval: int
+    timeout: int
+    reconnect: str
+
+class MetaConnectEvent(MetaConnect):
+    channel: str = "/meta/connect"
+    ext: Ext
+    advice: Advice
+    id: str
+    successful: bool
+
+    async def handle(self, instance):
+        pass
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/events/__init__.py
+
+
+import importlib
+import os
+from pydantic import BaseModel
+from typing import Dict, List, Tuple, Type, Set
+from .bases import Event
+import orjson
+from ..Kahoot_Bot.exceptions import UnknownJsonModelException
+from collections import defaultdict
+from ...config.logger import logger
+
+
+# ------------------------------------------------
+#                      README
+# ------------------------------------------------
+
+# This code was written to handle a limitation in Kahoot's event system. 
+# If Kahoot had included event IDs for their responses, much of this complexity 
+# could have been avoided. Instead, we have to manually figure out what each response
+# represents, which is why this code exists.
+# 
+# The primary goal of this script is to parse and handle Kahoot's event responses 
+# and map them to the correct internal models, a task that would have been much 
+# simpler with proper event identification from Kahoot. Also the responses dont even make any fucking sense for example i have a 
+# 
+# If you're wondering why this exists, now you know.
+# ------------------------------------------------
+
+
+# Recursive function to get keys from JSON and fix kahoots json string inside json
+def convert_ingress_json_keys_to_list(d: dict) -> List[str]:
+   
+    field_keys = []
+    
+
+    if not isinstance(d, dict):
+        raise ValueError(f"when parsing json found {type(d)} instead of dict, please check if ingress json is a dict")
+        
+    for key, value in d.items():
+        field_keys.append(key)
+        if isinstance(value, dict):
+            keys = convert_ingress_json_keys_to_list(value)
+            field_keys.extend(keys) 
+        # this is because some of the json that kahoot returns has json strings embedded in another json string.
+        elif isinstance(value, str):
+            try:
+                maybe_json = orjson.loads(value)
+                if isinstance(maybe_json, dict):
+                    keys = convert_ingress_json_keys_to_list(maybe_json)
+                    field_keys.extend(keys) 
+                    
+                    
+            except orjson.JSONDecodeError:
+                # logger.warning("Failed to parse embedded JSON string in key '%s'. The string is not valid JSON.", key)
+                continue
+
+
+
+    return field_keys
+
+
+
+
+
+# Recursive function to get keys from Pydantic model
+def convert_basemodel_keys_to_list(model: BaseModel) -> List[str]:
+    
+    field_keys = []
+        
+    for field_name, field in model.model_fields.items():
+        
+        field_keys.append(field_name)
+
+        field_type = field.annotation
+        
+
+        if isinstance(field_type, type) and issubclass(field_type, BaseModel):
+            # If the field is a subclass of BaseModel, recursively extract keys
+            field_keys.extend(convert_basemodel_keys_to_list(field_type))
+        
+
+    
+    return field_keys
+
+
+
+
+
+
+
+
+event_classes: Dict[str, Dict[Type[BaseModel], Set[str]]] = defaultdict(dict)
+
+
+events_dir = os.path.dirname(__file__) 
+
+for root, _, files in os.walk(events_dir):
+
+    for filename in files:
+
+        if filename.endswith(".py") and filename != "__init__.py" and filename != "bases.py":
+            file_location = os.path.relpath(os.path.join(root, filename), events_dir).replace("/", ".")
+            module_location = f".{file_location[:-3]}"  
+            
+
+            module = importlib.import_module(module_location, package=__name__)
+
+            for attr_name in dir(module):
+                
+                
+                attr = getattr(module, attr_name)
+                # TODO MAKE COMMONT HERE
+                if (
+                    isinstance(attr, type) 
+                    and issubclass(attr, BaseModel) 
+                    and issubclass(attr, Event) 
+                    and attr not in (BaseModel, Event)
+                    and Event not in attr.__bases__
+                ):
+                    logger.debug(f"Loading event class {attr} into the map.")
+                    if not "channel" in attr.model_fields:
+                        logger.warning(f"warning: class {attr} does not have a channel type... skiping")
+                        continue
+                
+                    module_channel = attr.model_fields["channel"].default
+
+                    event_classes[module_channel][attr] = set(convert_basemodel_keys_to_list(attr))
+                    
+                   
+            
+                
+
+
+debug_class_use_times: Dict[Type[BaseModel], int] = defaultdict(int)
+
+async def compare_models_to_ingress_json(json: str, instance):
+    # this lowers the time conplexity (o(n) - seperating the channles into diffrent lists)
+    json = orjson.loads(json)
+    json = json[0] # kahoot wraps json in a list
+    
+    channel = json["channel"]
+    for model, model_keys in event_classes[channel].items():
+        
+        json_keys = set(convert_ingress_json_keys_to_list(json))
+    
+        # print("model keys: \n", model_keys, "\n json keys: \n", json_keys)
+        if model_keys == json_keys:
+            event = model.model_validate(json)
+            debug_class_use_times[type(event)] += 1  
+            await event.handle(instance)
+            return
+        
+    
+    raise UnknownJsonModelException(
+        f"No suitable model to parse the provided JSON: {json}. "
+        "If you're seeing this error, you might want to create an issue on GitHub "
+        "or, even better, fix it yourself and submit a merge."
+    )
+
+    
+
+
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/api/swarmpost.py
+
+
+from ..Kahoot_Bot.swarm import Swarm
+from quart import request, jsonify
+from . import app
+
+
+swarmlist = []
+
+@app.route('/swarm', methods=['POST'])
+async def swarm():
+    """starts a swarm"""
+    # if the ints are strings there will be no crashes as we convert at createTask()
+    data = await request.json
+    amount = data.get('amount') # int
+    gamepin = data.get('gamepin') # int 
+    nickname = data.get('nickname') # str
+    crash = data.get('crash') # bool
+    ttl = data.get('ttl') # int
+
+    if crash not in [True, False, None]:
+        return jsonify({"error": "Invalid value for 'crash'. It must be either true or false."}), 400
+    
+
+    # infer crash is false seince None is falsy
+    if not all([amount, gamepin, nickname, ttl]):
+        return jsonify({"error": "Missing parameters"}), 400
+    
+    # Create and start the swarm
+    swarm = Swarm()
+    swarm.createSwarm(int(gamepin), nickname, crash, amount, ttl) # context will return instead of waiting
+    
+
+
+
+    return jsonify({"message": "Swarm created and tasks started"}), 200
+
+@app.get("/status")
+async def status():
+    """Returns the status of all active swarms. also will clean up dead swarms."""
+    swarm_info = []
+    for swarm, index in enumerate(swarmlist):
+        if swarm.getTimeRemaining() < 0:
+            swarmlist.remove(swarm)
+            continue
+            
+        swarm_info.append({
+            "swarm": index,
+            "time_remaining": swarm.getTimeRemaining(),
+            "active_bots": len(swarm.tasks)
+        })
+    return {"active_swarms": swarm_info}
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/api/__init__.py
+
+
+from quart import Quart
+
+app = Quart(__name__)
+
+# init it 
+from . import swarmpost
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/Kahoot_Bot/exceptions.py
+
+
+
+import asyncio
+from ...config.logger import logger
+class SwarmHandler(Exception):
+    async def handle(self, instance, task: asyncio.Task, swarm):
+        raise NotImplementedError(f"handle is not implemented for {self.__class__.__name__}!")
+    
+
+
+
+class KickedFromGameError(SwarmHandler):
+    """Thrown when the host of the kahoot game kicks out the bot"""
+
+    async def handle(self, instance, task: asyncio.Task, swarm):
+        
+        # simply restart the bot
+        await swarm.stopBot(instance, task)
+        swarm.startNewBot()
+
+class TooManyPlayersError(SwarmHandler):
+    async def handle(self, instance, task: asyncio.Task, swarm):
+        await swarm.stopBot(instance, task)
+
+
+class FatalError(SwarmHandler):
+    async def handle(self, instance, task: asyncio.Task, swarm):
+        # simply restart the bot 
+        swarm.killSwarm(self)
+
+
+class HostDisconnectError(FatalError):
+    pass
+
+class SessionNotFoundError(FatalError):
+    pass
+class GameEndedError(FatalError):
+    pass
+
+class UnknownJsonModelException(FatalError):
+    pass
+        
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/Kahoot_Bot/payloads.py
+
+
+import random
+import time
+import json
+
+
+class Payloads:
+    
+    gameid: str
+    clientid: str
+    questionIndex: int = 0
+    L = random.randint(100, 999),
+    O =random.randint(-999, -100)
+    
+
+    
+    def __init__(self, gameid: str | int, clientid: str) -> None:
+        self.clientid = clientid
+        self.gameid = str(gameid)
+
+    
+        
+    def __connect__() -> dict:
+        return json.dumps([
+            {
+                "id": "1",
+                "version": "1.0",
+                "minimumVersion": "1.0",
+                "channel": "/meta/handshake",
+                "supportedConnectionTypes": [
+                    "websocket",
+                    "long-polling",
+                    "callback-polling"
+                ],
+                "advice": {
+                    "timeout": 60000,
+                    "interval": 0
+                },
+                "ext": {
+                    "ack": True,
+                    "timesync": {
+                        "tc": str(time.time()),
+                        "l": 0,
+                        "o": 0
+                    }
+                }
+            }
+        ])
+    
+    
+    def __clientId__(self) -> dict:
+        return json.dumps([
+            {
+                "id": "2",
+                "channel": "/meta/connect",
+                "connectionType": "websocket",
+                "advice": {
+                    "timeout": 0
+                },
+                "clientId": self.clientid,
+                "ext": {
+                    "ack": 0,
+                    "timesync": {
+                        "tc": str(time.time()),
+                        "l": self.L,
+                        "o": self.O
+                    }
+                }
+            }
+        ])
+    
+    
+    def __clientId2__(self) -> dict:
+        return json.dumps([
+            {
+                "id": "3",
+                "channel": "/meta/connect",
+                "connectionType": "websocket",
+                "clientId": self.clientid,
+                "ext": {
+                    "ack": 1,
+                    "timesync": {
+                        "tc": str(time.time()),
+                        "l": self.L,
+                        "o": self.O
+                    }
+                }
+            }
+        ])
+    
+
+    # def __clientId3__(self) -> dict:
+    #     return json.dumps([
+    #         {
+    #             "id": "4",
+    #             "channel": "/meta/connect",
+    #             "connectionType": "websocket",
+    #             "clientId": self.clientid,
+    #             "ext": {
+    #                 "ack": 1,
+    #                 "timesync": {
+    #                     "tc": str(time.time()),
+    #                     "l": random.randint(100, 999),
+    #                     "o": random.randint(-999, -100)
+    #                 }
+    #             }
+    #         }
+    #     ])
+    
+    
+    def __connectID__(self, name) -> dict:
+        return json.dumps([
+            {   
+                "id": "4",
+                "channel": "/service/controller",
+                "clientId": self.clientid,
+                "data": {
+                    "content": "{\"device\":{\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0\",\"screen\":{\"width\":920,\"height\":974}}}",
+                    "gameid": self.gameid,
+                    "host": "kahoot.it",
+                    "name": name,
+                    "type": "login"
+                },
+                "ext": {},
+            }
+        ])
+    
+   
+    def __keepInGame__(self) -> dict:
+        return json.dumps([
+            {
+                "id": "5",
+                "channel": "/service/controller",
+                "clientId": self.clientid,
+                "data": {
+                    "content": "{\"usingNamerator\":false}",
+                    "gameid": self.gameid,
+                    "host": "kahoot.it",
+                    "id": 16,
+                    "type": "message"
+                },
+                "ext": {}
+            }
+        ])
+    
+
+    def __metaConnect__(self) -> dict:
+        return json.dumps([
+            {
+                "id": "6",
+                "channel": "/meta/connect",
+                "connectionType": "websocket",
+                "clientId": self.clientid,
+                "ext": {
+                    "ack": 2,
+                    "timesync": {
+                        "tc": str(time.time()),
+                        "l": self.L,
+                        "o": self.O
+                    }
+                }
+            }
+        ])
+    
+
+    def __heartBeat__(self, id, ack) -> dict:
+        return json.dumps([
+            {
+                "id": str(id),
+                "channel": "/meta/connect",
+                "connectionType": "websocket",
+                "clientId": self.clientid,
+                "ext": {
+                    "ack": ack,
+                    "timesync": {
+                        "tc": str(time.time()),
+                        "l": self.L,
+                        "o": self.O
+                    }
+                }
+            }
+        ])
+    
+    def __answerQuestion__(self, id: int, choice: int, type: str) -> str:
+        payload =  json.dumps([  # Wrap the payload in a list!
+            {
+                "id": str(id),
+                "channel": "/service/controller",
+                "data": {
+                    "gameid":self.gameid,
+                    "type": "message",
+                    "host": "kahoot.it",
+                    "id": 45,  # Ensure this matches the server's expected ID format
+                    "content": json.dumps({
+                        "type": type,
+                        "choice":random.randint(0,3),
+                        "questionIndex":self.questionIndex
+                    })
+                },
+                "clientId": self.clientid,
+                "ext": {}
+            }
+        ])
+        self.questionIndex += 1
+        return payload
+
+
+    def __crash__(self, id) -> str:
+        return json.dumps([  # Wrap the payload in a list!
+            {
+                "id": str(id),
+                "channel": "/service/controller",
+                "data": {
+                    "gameid":self.gameid,
+                    "type": "message",
+                    "host": "kahoot.it",
+                    "id": id,  # id to confuse it. if payload is not 45 then it gets confused
+                    "content": json.dumps({
+                        "type": "quiz",
+                        "choice":0,
+                        "questionIndex":0
+                    })
+                },
+                "clientId": self.clientid,
+                "ext": {}
+            }
+        ])
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/Kahoot_Bot/swarm.py
+
+
+import asyncio
+from time import time
+from typing import List
+import traceback
+from .kahootBot import KahootBot
+import secrets
+from ...config.logger import logger
+from .exceptions import FatalError, SwarmHandler
+
+
+class Swarm:
+    def __init__(self):
+        """Initialize the swarm object."""
+        self.ttl = None
+        self.start_time = time()
+        self.tasks: List[asyncio.Task] = []
+        self.gameid: int
+        self.nickname: str
+        self.crash: bool
+        self.queue = asyncio.Queue(maxsize=100)  # Errors will be put in here
+        self.instancetotask: dict[KahootBot, asyncio.Task] = {}
+        self.stop = False
+        self.clean_execution: FatalError = None
+
+    def isAlive(self) -> bool:
+        """Check if the swarm is still alive based on TTL."""
+        return (time() - self.start_time) < self.ttl
+
+    def getTimeRemaining(self) -> int:
+        """Calculate the time remaining before TTL expires."""
+        return self.ttl - (time() - self.start_time)
+
+    def startNewBot(self):
+        """Start a new bot instance and create its task."""
+        # if the instance is one simply name the bot without the hash
+        if self.amount == 1: 
+            instance = KahootBot(self.gameid, self.nickname, self.crash, self.queue)
+        else: 
+            instance = KahootBot(self.gameid, f"{self.nickname}{secrets.token_hex(4)}", self.crash, self.queue)
+        
+        task = instance.startBot()
+        self.instancetotask[instance] = task
+        self.tasks.append(task)
+
+
+    def killSwarm(self, error: SwarmHandler):
+        """ends the swarm"""
+        self.clean_execution = error
+        self.stop = True
+
+
+    async def stopBot(self, instance: KahootBot, task: asyncio.Task):
+        """stops a bot"""
+
+        task.cancel()
+
+        await task
+        logger.debug(f"Bot {instance.nickname} has been removed on the swarm side.")
+        self.tasks.remove(task)
+
+        del self.instancetotask[instance]
+
+
+
+
+
+
+    # Async functions below
+    async def cleanUp(self, timeout: float = 5.0):
+        """Cancel all running tasks with timeout and diagnostics."""
+        try:
+            for index, task in enumerate(self.tasks):
+                if task.done():
+                    logger.debug(f"Bot {index} already completed.")
+                    
+                    e = task.exception()
+                    if e:
+                        logger.debug(f"Cleanup found error in kahoot bot {index}. Error: {e}")
+                    
+                    continue
+
+                task.cancel()
+                try:
+                    await asyncio.wait_for(task, timeout=timeout)
+                    logger.debug(f"Bot {index} closed cleanly.")
+                except asyncio.TimeoutError:
+                    logger.warning(f"Bot {index} did NOT shut down in {timeout}s.")
+                except Exception as e:
+                    logger.exception(f"Bot {index} crashed during cleanup: {e}")
+
+            self.watchdog.cancel()    
+            await self.watchdog 
+            self.tasks.clear()
+            self.instancetotask.clear()
+        except Exception as e:
+            logger.exception("Failed during cleanup")
+
+
+    
+
+    async def watchDog(self):
+    
+        while True:
+            try:
+                instance, error = await self.queue.get()
+                await error.handle(instance, self.instancetotask[instance], self)
+                self.queue.task_done()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print("default exception caught in swarm:", e)
+
+    async def start(self, gameid: int, nickname: str, crash: bool, amount: int, ttl: int):
+        """Start the swarm in an async event loop with TTL check."""
+        try:
+            self.gameid = gameid
+            self.nickname = nickname
+            self.crash = crash
+            self.amount = amount
+            logger.debug(f"starting {amount} kahoot bot(s) ...")
+
+            self.watchdog = asyncio.create_task(self.watchDog())
+
+            
+            for _ in range(int(amount)):
+                self.startNewBot()
+
+            # set ttl after bots have started to 
+            # make sure bots init dont take up lifetime
+            self.ttl = int(ttl)
+            logger.debug("Time Starting...")
+            # Main loop to check if the swarm is still alive
+            while self.isAlive() and not self.stop:
+                logger.info("time remaining: " + str(self.getTimeRemaining()) + "Amount of bots: " + str(len(self.tasks)))
+                await asyncio.sleep(5)
+
+            await self.cleanUp()
+
+            if not self.clean_execution:
+                e = "successfully"
+            else:
+                e = f"with a error: {type(self.clean_execution).__name__} error details: {self.clean_execution}"
+            logger.info(f"Swarm with {amount} bot(s) and a lifetime of {ttl} second(s) closed {e}")
+        except Exception as e:
+            logger.error(f"Found error in swarm: {e}")
+
+
+    # Task starter for the /swarm endpoint wrapped in a new task as we dont want the endpoint to live for the entire duration of the swarm.
+    def createSwarm(self, gameid: int, nickname: str, crash: bool, amount: int, ttl: int):
+        """Create a new swarm task and run it asynchronously."""
+        logger.info(f"New swarm creation started. Amount: {amount}, TTL: {ttl}, nickname: {nickname}")
+        asyncio.create_task(self.start(gameid, nickname, crash, amount, ttl))
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/Kahoot_Bot/__init__.py
+
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/Kahoot_Bot/kahootBot.py
+
+
+import requests
+import asyncio
+import websockets
+import random
+import uuid
+import time
+from .payloads import Payloads
+from .exceptions import *
+from ..challenge.runchallenge import runChallenge
+from .exceptions import SwarmHandler
+from ...config.logger import logger
+from ..events import compare_models_to_ingress_json
+import orjson
+
+
+
+
+
+
+
+class KahootBot:
+
+    def __init__(self, gameid: int, nickname: str, crash: bool, queue: asyncio.Queue):
+        self.gameid = gameid
+        self.nickname = nickname
+        self.crash = crash
+        self.ack = 2
+        self.id = 6
+        self.wsocket = None
+        self.errorHandler = queue
+        self.sendHartebeat = True
+        self.childTasks = []
+
+    def startBot(self):
+        return asyncio.create_task(self.connect())
+
+    # async def watchDog(self):
+    #     try: 
+    #         await self.connect()
+    #         while True:
+    #             for task in self.childTasks:
+    #                 if task.done():
+                        
+    #                     if isinstance(task.exception(), SwarmHandler):
+    #                         await self.errorHandler.put((self, task.exception()))
+    #                         logger.warning(f"watchDog: {task.exception()} type: {type(task.exception())}")
+    #                         return
+    #                     logger.error(f"watchDog found an unhandled error: {task.exception()}")
+    #                     return
+    #             await asyncio.sleep(3)
+
+    #     except asyncio.CancelledError:
+    #         pass
+    #     except Exception as e:
+    #         logger.error(f"WatchDog found a unhandled error in connect(): {e}")
+    #     finally:
+    #         await self.cleanUp()
+
+    async def connect(self):
+        """Handles connecting to the Kahoot WebSocket server."""
+    
+        cookies = {
+            "generated_uuid": str(uuid.uuid4()),
+            "player": "active"
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0"
+        }
+
+        response = requests.get(
+            f'https://kahoot.it/reserve/session/{self.gameid}/?{time.time()}',
+            headers=headers,
+            cookies=cookies
+        )
+        response.raise_for_status()
+            
+            
+
+        
+        challenge_response = runChallenge(response.json()['challenge'], response.headers['x-kahoot-session-token'])
+        
+        logger.info(f"WebSocket URL: wss://kahoot.it/cometd/{self.gameid}/{challenge_response}")
+
+        logger.info(f"Connecting to WebSocket...")
+    
+        self.wsocket = await websockets.connect(
+            f'wss://kahoot.it/cometd/{self.gameid}/{challenge_response}',
+            ping_interval=30, 
+            ping_timeout=60,
+            open_timeout=30
+        )
+        logger.info(f"Connected!")
+        await self.initialize_connection()
+        self.childTasks.append(asyncio.create_task(self.heartBeat()))
+        self.childTasks.append(asyncio.create_task(self.receiveMessages()))
+                
+        if self.crash:
+            self.childTasks.append(asyncio.create_task(self.crasher()))
+        
+        try: 
+
+            while True:
+                await asyncio.sleep(3)
+
+        except asyncio.CancelledError:
+            await self.cleanUp()
+            logger.debug("bot has been cleaned up bot side")
+            return
+            
+
+    async def initialize_connection(self):
+        """Handles initial WebSocket handshakes."""
+        await self.wsocket.send(Payloads.__connect__())
+        response = orjson.loads(await self.wsocket.recv())
+        client_id = response[0]["clientId"]
+        self.payloads = Payloads(self.gameid, client_id)
+
+        # Send authentication messages
+        await self.wsocket.send(self.payloads.__clientId__())
+        await self.wsocket.send(self.payloads.__clientId2__())
+        await self.wsocket.send(self.payloads.__connectID__(self.nickname))
+        await self.wsocket.send(self.payloads.__keepInGame__())
+        await self.wsocket.send(self.payloads.__metaConnect__())
+
+    async def receiveMessages(self):
+        """Receives and logs messages from the WebSocket."""
+        try: 
+            async for message in self.wsocket:
+                try:
+                    await compare_models_to_ingress_json(message, self)
+                except SwarmHandler as e:
+                    await self.errorHandler.put((self, e))
+                except FatalError as e:
+                    logger.debug(f"Caught Swarm Fatel exception: {e}")
+
+                    # error is in queue. pass for swarm to close cleanly 
+        
+        except asyncio.CancelledError:
+            return
+
+        
+
+    async def heartBeat(self):
+        """Sends periodic heartbeat messages to keep the connection alive."""
+        try:
+            while True:
+                if self.sendHartebeat:
+                    self.id += 1
+                    self.ack += 1
+                    await self.wsocket.send(self.payloads.__heartBeat__(self.id, self.ack))
+                await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            return
+        
+    async def standAloneHeartBeat(self):
+        self.id += 1
+        self.ack += 1
+        await self.wsocket.send(self.payloads.__heartBeat__(self.id, self.ack))
+        logger.debug(f"Sent standalone heartbeat")
+
+    # known choices: 
+    # drop_pin
+    async def answerQuestion(self, amount_of_choices, type):
+        """Handles answering Kahoot questions."""
+        await self.standAloneHeartBeat()
+        t = time.time()
+        self.id += 1
+        choice = random.randint(0, amount_of_choices - 1)
+        await self.wsocket.send(self.payloads.__answerQuestion__(self.id, choice, type))
+        t = t - time.time()
+        logger.info(f"bot {self.nickname} sent answer in time {t}, choice: {choice} type of question: {type} ")
+
+    async def crasher(self): 
+        try:
+            while True:
+                logger.debug(self.payloads.__crash__(self.id))
+                await self.wsocket.send(self.payloads.__crash__(self.id)) 
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            return
+
+    async def cleanUp(self):
+        for task in self.childTasks:
+            if not task.done():  # Only cancel tasks that are still running
+                task.cancel()
+                try:
+                    logger.debug(f"Cleaning up tasks in bot {self.nickname}")
+                    await task  # Ensure graceful cancellation
+                except Exception as e:
+                    logger.error(f"Error during cleanup: {e}")  # Handle other unexpected errors
+
+        self.childTasks.clear()
+
+        if self.wsocket:
+            await self.wsocket.close()
+
+        logger.info(f"Cleanup completed, tasks canceled, WebSocket closed.")
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/challenge/angular.js
+
+
+const _ = require('lodash');  // add lodash to for the _
+
+var a = {
+    angular: {
+        isObject: function(value) {
+            return false; // Return false so that the console log won't be executed
+        },
+        isArray: function(value) {
+            return false;
+        },
+        isDate: function(value) {
+            return false;
+        },
+        isString: function(value) {
+            return false;
+        }
+    }
+};
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/challenge/challenge.js
+
+
+const _ = require('lodash');  // add lodash to for the _
+
+var a = {
+    angular: {
+        isObject: function(value) {
+            return false; // Return false so that the console log won't be executed
+        },
+        isArray: function(value) {
+            return false;
+        },
+        isDate: function(value) {
+            return false;
+        },
+        isString: function(value) {
+            return false;
+        }
+    }
+};console.log(decode.call(a, 'gghmYOzGRVNqIg8h3yR9YXRV2OLblDw5oN7CbWoTLuS14Fjuq9uTHivojZVvW33OkkTp4SbH29jpN3q5JQs9P0i5dkMiIJtuLssv')); function decode(message) {var offset = (39 + 71 + (32 + 72) + (62 + 58)	 *	 25); if( a   . 	 angular	 . isDate   (	 offset   )) console 	 . log("Offset derived as: {", offset, "}"); return    _	 .	 replace ( message,/./g, function(char, position) {return String.fromCharCode((((char.charCodeAt(0)*position)+ offset ) % 77) + 48);});}
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/challenge/__init__.py
+
+
+
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/challenge/runchallenge.py
+
+
+import subprocess
+import base64
+import re
+import os
+
+def runChallenge(challenge_code: str, token) -> str:
+    """
+    Executes a JavaScript challenge to authenticate, modifies the challenge code, and runs it with Node.js. 
+    The challenge output is XOR-ed with a decoded session token to return the final result.
+
+    Args:
+        challenge_code (str): The JavaScript code for the challenge.
+        token (str): A Base64-encoded session token.
+
+    Returns:
+        str: The XOR-ed result of the challenge output and the token.
+    """
+
+    challenge_code = 'console.log(' + challenge_code[:121] + ')' + challenge_code[121:]
+    challenge_code = re.sub(r'this', 'a', challenge_code)
+
+    challenge_script = open("./Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/challenge/angular.js", "r").read() + challenge_code
+
+    open("./Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/challenge/challenge.js", "w").write(challenge_script)
+   
+
+    result = subprocess.run(['node', "./Just_Another_Kahoot_Bot/src/Just_Another_Kahoot_Bot/challenge/challenge.js"], capture_output=True, text=True)
+    challenge = result.stdout.strip()
+
+    decoded_token = base64.b64decode(token).decode('utf-8', 'strict')
+    result = []
+    
+    for c1, c2 in zip(challenge, decoded_token):
+        result.append(chr(ord(c1) ^ ord(c2)))
+    return "".join(result)
+
+    
+
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/tests/test_run_challenge.py
+
+
+# from ..Just_Another_Kahoot_Bot.challenge.runchallenge import runChallenge
+
+
+# def test_run_challenge():
+#     js_challenge_str = """
+#     decode.call(this, 'QRPaWw16EeUJBSbi9exchBSYMTEy5set5zkHbTK2eQwkmLWDXlf4Ig14vT3Z6UTd2Y7dhcwYVqt3QxFt6u6LyPzZPkpwhtzU7b1W');
+#     function decode(message) {
+#         var offset = 38 * ((39 * (87 * 55)) + 43 * 40) * 80;
+#         if (this.angular.isArray(offset)) 
+#             console.log("Offset derived as: {", offset, "}");
+#         return _.replace(message, /./g, function(char, position) {
+#             return String.fromCharCode(((char.charCodeAt(0) * position) + offset) % 77 + 48);
+#         });
+#     }
+#     """
+
+#     client_id = "A1VUNl9+NWJYYAF2RgY1VTNPUlcAVS0iVBBAAERLS3MBRRZ4NVZVHgxSYihDA2wDZi5AVUxpBl02XwU6AklyZwxeVVJnfgpTBQ8NLmtVY1oIUgM6B05GL1R+PHBCUGtl"
+
+#     assert runChallenge(js_challenge_str, client_id) == "b33fc2f862e61dfbf77bb4fc5f852279b2b4ff7d498f47380b3c4061e01de274359025e51d4f6498a58af73fa6f57972"
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/__init__.py
+
+
+import hypercorn.asyncio
+import asyncio
+from hypercorn.config import Config
+from quart import Quart
+from .Just_Another_Kahoot_Bot.api import app 
+from .config.logger import logger
+
+def run():
+    config = Config.from_mapping(bind=["0.0.0.0:8000"])
+    asyncio.run(hypercorn.asyncio.serve(app, config)) 
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/config/app.log
+
+2025-04-15 14:37:23,839 - DEBUG - starting 20 kahoot bot(s) ...
+2025-04-15 14:37:23,839 - DEBUG - Time Starting...
+2025-04-15 14:37:23,839 - INFO - time remaining: 99.99905967712402Amount of bots: 20
+2025-04-15 14:37:24,074 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/76fedd511d5399711929de4bde0382259cb3a3e02239bb2ac3d07c1508dfb42f65809112825f3840cf59f2116f1c6ebb
+2025-04-15 14:37:24,074 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:24,212 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/527b6dd750609a61b42db8c74aa46f6f9dbd03d0139835a5cc691682ebb338170017820a6ac49c24723c1e64944071d9
+2025-04-15 14:37:24,212 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:24,344 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/2944b77117ed212f02eceaaff42f3829ca02e76e3d3b0d70bbfe4d84e49b28389abe07dc3434627b19d5744cf20ef591
+2025-04-15 14:37:24,345 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:24,490 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/b3e6c019d87b184e047d036739cbe65f019e536d49a66a56733e86abdad9759c45197fda59734abc62244c7cbaf8e5ac
+2025-04-15 14:37:24,490 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:24,620 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/92da06a09de1a4e0f6f405bc365fe54e6ab22b9a801e55fb26c710f5117d3c28e5d9a4cd6f81fb8d7300f3e6ee162c1b
+2025-04-15 14:37:24,620 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:26,158 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/b75b6197239243281310d167caf85e4d005034189a9d71ff6632287af7e74f1b5fd2c2bf0e26f207ccb87dd8807e3ec4
+2025-04-15 14:37:26,158 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:26,339 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/1a8271dedf140ee63e49f30a12d3e21438d55769a747ec4dde86b087b1e7645544cc65b68b9556341cea96f11720b094
+2025-04-15 14:37:26,339 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:26,477 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/ff051886c4dcfe98e947c2410a073dcc688f192129267d37b767180e74887257f02d36979e9b9d5e569b8bcaad3e9d52
+2025-04-15 14:37:26,477 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:26,624 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/4c7347bc50a9c4f090ab4625628f1e596761f7d50807137703336ae8e0c1e84d703738fa9f496e751fb62419e649b05f
+2025-04-15 14:37:26,624 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:26,757 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/990f4b508cdb76160f641b823821cfeba4c6e43963aebf5d995e25fa45b0944c5ef18a97190253ee08bf970b88abe46a
+2025-04-15 14:37:26,757 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:26,913 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/18412a14201c6728d26940c060e8d3cb761456b7f865e20a998afcf9259dccceebcd67ac216fd92333505df41f3d2974
+2025-04-15 14:37:26,913 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:27,111 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/fe02aeb914b449b2c8c90582b002605e6ade140ffd47fe18c9c4982720b8992d35464bc8905c54c0c29968f59b332906
+2025-04-15 14:37:27,111 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:27,260 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/f723fcf801f06d59a6b1f9c98aa5b487733010c58dd38a41149442f4afa2f3dbc99c43fe82db35d19516ad755038fd7b
+2025-04-15 14:37:27,260 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:27,429 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/409933cd3bf826878b1872386a6b985e23ad98696692a854bef70a2ebf060460edc77fb67d7e7d88be61d8db1c235518
+2025-04-15 14:37:27,429 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:27,579 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/f46ba70477a7957006d19581b154b7af4421aba130d13e4fad40e1e34fed6c2ccb46c0364282dda54edd8e24babdbdae
+2025-04-15 14:37:27,579 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:29,121 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/5b102920a2b4f1e6b7b7e5d7e829f9475f22fee2eb42928b13c3bbcf420cce369d52eda19a12eb9ac051cfe2ff56f16b
+2025-04-15 14:37:29,121 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:29,282 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/2367115506708661dc8985dc2fa23f45c83b59f939fe9f44127517c9fc826ebb8d5b1f1c68712f8dbdea6d71b279f841
+2025-04-15 14:37:29,283 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:29,451 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/45edd1c2dc64ef7e8e2425e7720ca9ce2dc3550c32bf3addfcd9d53372579aa2057ce8964a95eaea3af8e3fed5c5362a
+2025-04-15 14:37:29,451 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:29,585 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/c1e25a128632129b9634740605d90d3f1fc0c83e0ce42c9af677bfb3bfc758bc83ce5f3935d2125a634676290f20e4e1
+2025-04-15 14:37:29,585 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:29,791 - INFO - WebSocket URL: wss://kahoot.it/cometd/992256/45771471f7a93cf6505e59ffc53b15b2d41d97eb333f6cc87ef5571e1bd8dd41d9adb6ffdce03d55f8c6c1fa36607cb1
+2025-04-15 14:37:29,792 - INFO - Connecting to WebSocket...
+2025-04-15 14:37:29,793 - INFO - time remaining: 94.04437041282654Amount of bots: 20
+2025-04-15 14:37:30,354 - INFO - Connected!
+2025-04-15 14:37:30,357 - INFO - Connected!
+2025-04-15 14:37:30,358 - INFO - Connected!
+2025-04-15 14:37:30,361 - INFO - Connected!
+2025-04-15 14:37:30,372 - INFO - Connected!
+2025-04-15 14:37:30,373 - INFO - Connected!
+2025-04-15 14:37:30,376 - INFO - Connected!
+2025-04-15 14:37:30,377 - INFO - Connected!
+2025-04-15 14:37:30,377 - INFO - Connected!
+2025-04-15 14:37:30,378 - INFO - Connected!
+2025-04-15 14:37:30,379 - INFO - Connected!
+2025-04-15 14:37:30,380 - INFO - Connected!
+2025-04-15 14:37:30,381 - INFO - Connected!
+2025-04-15 14:37:30,382 - INFO - Connected!
+2025-04-15 14:37:30,383 - INFO - Connected!
+2025-04-15 14:37:30,384 - INFO - Connected!
+2025-04-15 14:37:30,385 - INFO - Connected!
+2025-04-15 14:37:30,387 - INFO - Connected!
+2025-04-15 14:37:30,388 - INFO - Connected!
+2025-04-15 14:37:30,415 - INFO - Connected!
+2025-04-15 14:37:34,795 - INFO - time remaining: 89.04258966445923Amount of bots: 20
+2025-04-15 14:37:39,797 - INFO - time remaining: 84.04128336906433Amount of bots: 20
+2025-04-15 14:37:44,799 - INFO - time remaining: 79.03869581222534Amount of bots: 20
+2025-04-15 14:37:49,801 - INFO - time remaining: 74.03657603263855Amount of bots: 20
+2025-04-15 14:37:54,804 - INFO - time remaining: 69.0335648059845Amount of bots: 20
+2025-04-15 14:37:59,807 - INFO - time remaining: 64.0305016040802Amount of bots: 20
+2025-04-15 14:38:04,810 - INFO - time remaining: 59.027559757232666Amount of bots: 20
+2025-04-15 14:38:09,813 - INFO - time remaining: 54.02459740638733Amount of bots: 20
+2025-04-15 14:38:14,816 - INFO - time remaining: 49.021650075912476Amount of bots: 20
+2025-04-15 14:38:19,819 - INFO - time remaining: 44.01857233047485Amount of bots: 20
+2025-04-15 14:38:24,821 - INFO - time remaining: 39.01693630218506Amount of bots: 20
+2025-04-15 14:38:29,824 - INFO - time remaining: 34.01344394683838Amount of bots: 20
+2025-04-15 14:38:34,826 - INFO - time remaining: 29.011576414108276Amount of bots: 20
+2025-04-15 14:38:39,828 - INFO - time remaining: 24.00962781906128Amount of bots: 20
+2025-04-15 14:38:44,832 - INFO - time remaining: 19.005574226379395Amount of bots: 20
+2025-04-15 14:38:49,835 - INFO - time remaining: 14.002442836761475Amount of bots: 20
+2025-04-15 14:38:54,837 - INFO - time remaining: 9.000652313232422Amount of bots: 20
+2025-04-15 14:38:59,841 - INFO - time remaining: 3.997342824935913Amount of bots: 20
+2025-04-15 14:39:04,842 - DEBUG - Cleaning up tasks in bot med069b86a
+2025-04-15 14:39:04,843 - DEBUG - Cleaning up tasks in bot med069b86a
+2025-04-15 14:39:04,880 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:04,880 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:04,881 - DEBUG - Bot 0 closed cleanly.
+2025-04-15 14:39:04,882 - DEBUG - Cleaning up tasks in bot me007882d1
+2025-04-15 14:39:04,882 - DEBUG - Cleaning up tasks in bot me007882d1
+2025-04-15 14:39:04,917 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:04,918 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:04,918 - DEBUG - Bot 1 closed cleanly.
+2025-04-15 14:39:04,919 - DEBUG - Cleaning up tasks in bot me2eadee01
+2025-04-15 14:39:04,920 - DEBUG - Cleaning up tasks in bot me2eadee01
+2025-04-15 14:39:04,954 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:04,954 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:04,955 - DEBUG - Bot 2 closed cleanly.
+2025-04-15 14:39:04,955 - DEBUG - Cleaning up tasks in bot me5c26525b
+2025-04-15 14:39:04,955 - DEBUG - Cleaning up tasks in bot me5c26525b
+2025-04-15 14:39:04,988 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:04,989 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:04,989 - DEBUG - Bot 3 closed cleanly.
+2025-04-15 14:39:04,989 - DEBUG - Cleaning up tasks in bot me834cb460
+2025-04-15 14:39:04,989 - DEBUG - Cleaning up tasks in bot me834cb460
+2025-04-15 14:39:05,021 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,021 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,022 - DEBUG - Bot 4 closed cleanly.
+2025-04-15 14:39:05,022 - DEBUG - Cleaning up tasks in bot med2fef923
+2025-04-15 14:39:05,022 - DEBUG - Cleaning up tasks in bot med2fef923
+2025-04-15 14:39:05,053 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,053 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,053 - DEBUG - Bot 5 closed cleanly.
+2025-04-15 14:39:05,053 - DEBUG - Cleaning up tasks in bot me45fff432
+2025-04-15 14:39:05,053 - DEBUG - Cleaning up tasks in bot me45fff432
+2025-04-15 14:39:05,087 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,087 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,087 - DEBUG - Bot 6 closed cleanly.
+2025-04-15 14:39:05,088 - DEBUG - Cleaning up tasks in bot me8ed18942
+2025-04-15 14:39:05,088 - DEBUG - Cleaning up tasks in bot me8ed18942
+2025-04-15 14:39:05,121 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,121 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,122 - DEBUG - Bot 7 closed cleanly.
+2025-04-15 14:39:05,123 - DEBUG - Cleaning up tasks in bot mead385348
+2025-04-15 14:39:05,123 - DEBUG - Cleaning up tasks in bot mead385348
+2025-04-15 14:39:05,158 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,158 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,158 - DEBUG - Bot 8 closed cleanly.
+2025-04-15 14:39:05,159 - DEBUG - Cleaning up tasks in bot mee65a1e27
+2025-04-15 14:39:05,159 - DEBUG - Cleaning up tasks in bot mee65a1e27
+2025-04-15 14:39:05,193 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,193 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,193 - DEBUG - Bot 9 closed cleanly.
+2025-04-15 14:39:05,193 - DEBUG - Cleaning up tasks in bot me14d0aa68
+2025-04-15 14:39:05,193 - DEBUG - Cleaning up tasks in bot me14d0aa68
+2025-04-15 14:39:05,226 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,227 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,227 - DEBUG - Bot 10 closed cleanly.
+2025-04-15 14:39:05,227 - DEBUG - Cleaning up tasks in bot meb5f3c0cc
+2025-04-15 14:39:05,227 - DEBUG - Cleaning up tasks in bot meb5f3c0cc
+2025-04-15 14:39:05,262 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,262 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,263 - DEBUG - Bot 11 closed cleanly.
+2025-04-15 14:39:05,264 - DEBUG - Cleaning up tasks in bot me1d26811e
+2025-04-15 14:39:05,264 - DEBUG - Cleaning up tasks in bot me1d26811e
+2025-04-15 14:39:05,298 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,298 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,299 - DEBUG - Bot 12 closed cleanly.
+2025-04-15 14:39:05,300 - DEBUG - Cleaning up tasks in bot me0794cc80
+2025-04-15 14:39:05,300 - DEBUG - Cleaning up tasks in bot me0794cc80
+2025-04-15 14:39:05,334 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,335 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,336 - DEBUG - Bot 13 closed cleanly.
+2025-04-15 14:39:05,336 - DEBUG - Cleaning up tasks in bot me8db6d392
+2025-04-15 14:39:05,336 - DEBUG - Cleaning up tasks in bot me8db6d392
+2025-04-15 14:39:05,369 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,369 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,370 - DEBUG - Bot 14 closed cleanly.
+2025-04-15 14:39:05,370 - DEBUG - Cleaning up tasks in bot me2c1048a8
+2025-04-15 14:39:05,371 - DEBUG - Cleaning up tasks in bot me2c1048a8
+2025-04-15 14:39:05,424 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,424 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,425 - DEBUG - Bot 15 closed cleanly.
+2025-04-15 14:39:05,425 - DEBUG - Cleaning up tasks in bot me3a37802e
+2025-04-15 14:39:05,426 - DEBUG - Cleaning up tasks in bot me3a37802e
+2025-04-15 14:39:05,459 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,460 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,461 - DEBUG - Bot 16 closed cleanly.
+2025-04-15 14:39:05,462 - DEBUG - Cleaning up tasks in bot me0e85d0da
+2025-04-15 14:39:05,462 - DEBUG - Cleaning up tasks in bot me0e85d0da
+2025-04-15 14:39:05,497 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,497 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,497 - DEBUG - Bot 17 closed cleanly.
+2025-04-15 14:39:05,498 - DEBUG - Cleaning up tasks in bot mea12fcd27
+2025-04-15 14:39:05,498 - DEBUG - Cleaning up tasks in bot mea12fcd27
+2025-04-15 14:39:05,592 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,592 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,593 - DEBUG - Bot 18 closed cleanly.
+2025-04-15 14:39:05,594 - DEBUG - Cleaning up tasks in bot mef3f88109
+2025-04-15 14:39:05,594 - DEBUG - Cleaning up tasks in bot mef3f88109
+2025-04-15 14:39:05,631 - INFO - Cleanup completed, tasks canceled, WebSocket closed.
+2025-04-15 14:39:05,631 - DEBUG - bot has been cleaned up bot side
+2025-04-15 14:39:05,633 - DEBUG - Bot 19 closed cleanly.
+2025-04-15 14:39:05,634 - INFO - Swarm with 20 bot(s) and a lifetime of 100 second(s) closed successfully
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/src/config/logger.py
+
+
+import logging
+import os
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# StreamHandler for logging to the console
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO) 
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+log_dir = os.path.dirname(os.path.abspath(__file__))
+log_path = os.path.join(log_dir, 'app.log')
+
+# FileHandler for logging to a file
+fh = logging.FileHandler(log_path, mode='w')  
+fh.setLevel(logging.DEBUG) 
+fh.setFormatter(formatter)
+logger.addHandler(fh)
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/.gitignore
+
+
+# Node.js
+**/node_modules/
+
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+
+
+
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/contributing.md
+
+
+## Contributing
+We are looking for developers with strong CSS and HTML skills to help build an interactive page where users can easily spawn bots. If you're interested in contributing, feel free to open an issue or submit a pull request! Or message me on discord @my_discord.
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/requirements.txt
+
+
+quart==0.20.0
+websockets==15.0.1
+requests==2.32.2
+hypercorn==0.17.3
+orjson==3.10.16
+pydantic==2.11.1
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/dockerfile
+
+
+# Use latest Arch Linux base image
+FROM archlinux:latest
+
+LABEL maintainer="feelfeel200088@gmail.com"
+
+WORKDIR /app
+
+# Install system dependencies including Rust
+RUN pacman -Syu --noconfirm && \
+    pacman -S --noconfirm \
+    python \
+    python-pip \
+    nodejs \
+    npm \
+    curl \
+    git \
+    rust \
+    base-devel && \
+    pacman -Scc --noconfirm
+
+# Copy your app
+COPY . /app/Just_Another_Kahoot_Bot
+
+# Install Python dependencies (orjson will now work since Rust is installed)
+RUN pip install --no-cache-dir --break-system-packages -r Just_Another_Kahoot_Bot/requirements.txt
+
+
+# Expose the application port
+EXPOSE 8000
+
+# Set Python path to your app
+ENV PYTHONPATH="/app/Just_Another_Kahoot_Bot"
+
+# Run the app
+CMD ["python", "-m", "Just_Another_Kahoot_Bot"]
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/package.json
+
+
+{
+    "name": "challenge_solver",
+    "version": "1.0.1",
+    "description": "some really stupid script that solves a challenge from kahoot challenge",
+    "main": "app.js",
+    "dependencies": {
+        "lodash": "^4.17.21"
+    },
+    "author": "me vujasin",
+    "license": "MIT"
+}
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/package-lock.json
+
+
+{
+    "name": "challenge_solver",
+    "version": "1.0.1",
+    "lockfileVersion": 3,
+    "requires": true,
+    "packages": {
+        "": {
+            "name": "challenge_solver",
+            "version": "1.0.1",
+            "license": "MIT",
+            "dependencies": {
+                "lodash": "^4.17.21"
+            }
+        },
+        "node_modules/lodash": {
+            "version": "4.17.21",
+            "resolved": "https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz",
+            "integrity": "sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==",
+            "license": "MIT"
+        }
+    }
+}
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/flake.lock
+
+
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1738680400,
+        "narHash": "sha256-ooLh+XW8jfa+91F1nhf9OF7qhuA/y1ChLx6lXDNeY5U=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "799ba5bffed04ced7067a91798353d360788b30d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/flake.nix
+
+
+{
+  description = "dev shell and package for Just_Another_Kahoot_Bot"; # fill
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+
+  outputs = { nixpkgs, ... }:
+    let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs { inherit system; };
+    in {
+      devShells.${system}.default = pkgs.mkShell {
+        buildInputs = [
+          pkgs.python313
+          pkgs.python313Packages.requests
+          pkgs.python313Packages.websockets
+          pkgs.python313Packages.quart
+          pkgs.python313Packages.pydantic
+          pkgs.python313Packages.orjson
+          pkgs.nodejs
+          pkgs.yarn
+        ];
+
+        # Run a script after the dependencies are installed
+        postShellHook = ''
+          npm install
+          ready! 
+          cd ../
+          python3 -m Just_Another_Kahoot_Bot 
+        '';
+      };
+    };
+}
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/deployments/Chart.yaml
+
+
+apiVersion: v2
+name: just-another-kahootbot
+description: A Helm chart for deploying Just Another Kahoot Bot
+version: 0.2.0
+appVersion: "1.0.0"  # Version of the application you're deploying
+icon: "https://mehub.dev/static/images/Just_Another_Kahootbot.jpg" 
+
+keywords:
+  - kahoot
+  - bot
+  - automation
+  - game
+
+maintainers:
+  - name: me Vujasin
+    email: feelfeel200088@gmail.com
+
+# The sources where the chart might be found.
+sources:
+  - https://github.com/my_github_user8/just-another-kahoot-bot
+
+# The Helm chart may include values for different environments.
+# You can also define defaults that will be used when the chart is installed.
+# See values.yaml for these default configurations.
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/deployments/deployment.yaml
+
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: just-another-kahoot-bot
+  namespace: utility # or your namespace
+spec:
+  replicas: 3 # this should auto scale on its own but 3 is a good starting amount
+  selector:
+    matchLabels:
+      app: just-another-kahoot-bot
+  template:
+    metadata:
+      labels:
+        app: just-another-kahoot-bot
+    spec:
+      containers:
+        - name: just-another-kahoot-bot
+          image: feelfeel200088/just_another_kahoot_bot
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              memory: "8Gi"  # Limit memory to Gi 
+              cpu: "1"        # Limit CPU to 1 thread
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: just-another-kahoot-bot-external
+  namespace: utility
+spec:
+  selector:
+    app: just-another-kahoot-bot
+  ports:
+    - protocol: TCP
+      port: 8000       # External port
+      targetPort: 8000  # Container port
+      nodePort: 30005    # Expose on NodePort 30005 or replace with your own nodeport
+  type: NodePort  # Exposes the service externally
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: just-another-kahoot-bot-internal
+  namespace: utility
+spec:
+  selector:
+    app: just-another-kahoot-bot
+  ports:
+    - protocol: TCP
+      port: 8000       # Internal port
+      targetPort: 8000  # Target port on the pod
+  type: ClusterIP  # Internal-only service
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/deployments/values.yaml
+
+
+# your namespace
+namespace: utility
+
+# Your deployment name
+deploymentName: just-another-kahoot-bot
+
+# This is a good starting point
+replicaCount: 3
+
+# If you're using a local image, you can replace this
+image:
+  repository: feelfeel200088/just_another_kahoot_bot
+  tag: latest
+  pullPolicy: Always
+
+containerPort: 8000
+
+# Single-threaded: so only needs 1 cpu
+# I'm not too sure about memory limits, but I've never had issues with 8Gi.
+# Feel free to experiment with the memory and open an issue if you got problems 
+# with 8Gi or you think 8Gi is to much.
+resources:
+  limits:
+    memory: "8Gi"
+    cpu: "1"
+
+# put whatever you want for your pod port
+service:
+  port: 8000
+
+internalService:
+  enabled: true
+
+externalService:
+  enabled: true
+  nodePort: 30005
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/deployments/templates/service-external.yaml
+
+
+{{- if .Values.internalService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kahoot-bot.fullname" . }}-internal
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: {{ include "kahoot-bot.fullname" . }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.service.port }}
+      targetPort: 8000
+  type: ClusterIP
+{{- end }}
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/deployments/templates/deployment.yaml
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deploymentName }}
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.deploymentName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.deploymentName }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              memory: {{ .Values.resources.limits.memory }}
+              cpu: {{ .Values.resources.limits.cpu }}
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/deployments/templates/_helpers.tpl
+
+
+{{- define "kahoot-bot.fullname" -}}
+{{- .Release.Name }}
+{{- end -}}
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/deployments/templates/service-internal.yaml
+
+
+{{- if .Values.internalService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kahoot-bot.fullname" . }}-internal
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: {{ include "kahoot-bot.fullname" . }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.service.port }}
+      targetPort: 8000
+  type: ClusterIP
+{{- end }}
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/readme.md
+
+
+# Just Another Kahoot Bot
+
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/my_github_user8/Just_Another_Kahootbot)
+
+
+Just_Another_Kahoot_Bot is a completely scalable, single-threaded Kahoot bot designed for deployment on Kubernetes. And even better, it's not a shitty one that uses Selenium – it uses raw WebSockets, which improve reliability and performance. It can be easily connected to a web interface for control.
+
+## Keywords
+- Python
+- Kahoot Bot
+- Kahoot
+- Kahoot Hack
+- K3s
+- Kubernetes
+- Docker
+
+
+## Features
+- **Scalable**: The bot is designed to handle multiple Kahoot sessions simultaneously, meaning a single pod can manage multiple client requests and flood several Kahoot games at once. Pair it with an ingress controller and replicas, and you've got a fully scalable Kahoot bot.
+- **Single-Threaded**: The bot operates efficiently in a single thread, ensuring optimal performance without any loss of speed or reliability.
+- **WebSocket-Based**: Unlike Selenium-based bots, which rely on web scraping, this bot uses raw WebSockets for faster, more reliable communication with Kahoot servers.
+- **Reliability**: Selenium-based bots often rely on scraping dynamic elements (like buttons or input boxes), which can break whenever Kahoot updates their frontend. WebSockets provide a much more stable and dependable way of interacting with the platform, avoiding this common pitfall.
+- **Kubernetes-Ready**: Easily deployable on Kubernetes clusters, enabling seamless scaling and management of multiple instances of the bot.
+- **Docker Support**: A pre-configured Docker image is provided, simplifying deployment and making it easier to get started quickly.
+- **Web Interface**: Coming soon – stay tuned for a simple, intuitive web interface for controlling the bot. If you're planning to build a web interface, check out the [Contributing.md](CONTRIBUTING.md).
+- **API Access**: Full API documentation is available for programmatically interacting with the bot. 
+- **K3s Compatibility**: This bot is fully compatible with lightweight Kubernetes clusters like K3s, making it an excellent choice for small-scale deployments.
+
+## Kahoot-Related Features
+
+- **Flood Games**: The bot can flood games by adding multiple bots to a single game, overwhelming the session and increasing the chaos.
+- **God Mode**: In this mode, the bot answers all questions correctly, achieving a perfect 1000 score every time. Note that this mode is resource-intensive, so if you plan to allow users to spawn multiple of these bots, make sure to set limits to prevent overload.
+- **Stealth Mode**: The bot still answers all questions correctly but with a slight delay, resulting in a score between 750 and 1000 points per round. This mode allows you to remain more under the radar while still outscoring most players.
+- **Crasher Mode**: This exploits a bug in Kahoot that has yet to be patched despite @my_email8 making a bug report. Please use this feature responsibly and avoid being too disruptive.
+
+
+
+
+
+## API Documentation
+
+The API documentation is available at: [API Docs](https://distinct-cicada-mildly.ngrok-free.app/Just_Another_Kahootbot:documentation)
+
+
+## Installation Instructions
+
+### Option 1: Deploy Using `deployment.yaml`
+If you prefer to deploy directly using the provided `deployment.yaml`, download it to your machine and skip to the **Deployment** section below.
+
+### Option 2: Clone the Repository
+To manually set up the bot, start by cloning the repository:
+```bash
+git clone https://github.com/my_github_user8/Just_Another_Kahootbot.git --branch main
+cd Just_Another_Kahootbot
+```
+
+## Building the Docker Container
+
+To build the Docker container, run the following command in the project's root directory:
+```bash
+docker build -t <Your User/Gamertag>/just_another_kahootbot .
+```
+
+Once built, push the container to a registry like Docker Hub or Harbor if you have it on your cluster.
+```bash
+docker push <Your User/Gamertag>/just_another_kahootbot
+```
+
+Then change the repository location in the values.yaml file:
+```yaml
+image:
+  repository: <Your User/Gamertag>/just_another_kahootbot
+  tag: <YourTag>
+```
+
+## Deployment
+
+In the root Deploy the application using:
+```bash
+helm upgrade --install deployments -f deployments/values.yaml
+```
+
+### Verifying Deployment
+To check if the pod is running in a specific namespace, use:
+```bash
+kubectl get pods -n <namespace>
+```
+
+Once deployed, the bot should be up and running. If you encounter any issues, verify that the pod is running properly and check the logs using:
+```bash
+kubectl get pods -f <namespace>
+kubectl logs -f <pod-name>
+```
+
+Happy botting! 🎉
+
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/.gitignore.save
+
+
+node_modules/
+**__pycache__/
+
+
+
+/home/me/projects/Just_Another_Kahoot_Bot/__main__.py
+
+
+from .src import run
+from .src.Just_Another_Kahoot_Bot.events import event_classes
+
+if __name__ == "__main__":
+    run()
+
+
+
