@@ -14,14 +14,14 @@
         };
         in {
             packages.default = pkgs.rustPlatform.buildRustPackage {
-                pname = "my-rust-app";
-                version = "0.1.0";
+                pname = "dir_to_pdf";
+                version = "0.1.2";
 
-                src = fetchFromGitHub {
+                src = pkgs.fetchFromGitHub {
                     owner = "Feelfeel20088";
                     repo = "dir_to_pdf";
-                    rev = "master";
-                    hash = "sha256-03wxx0825cmyczrams1zhs5wvfjxjszbp6h78dg9ibgnhay75ny8";
+                    rev = "b0d2ae9";
+                    hash = "sha256-FmbGEG/nCARj1oYJjHJimnXTom4VAQIT912+faFu0gg=";
                 };
 
                 cargoLock = {
