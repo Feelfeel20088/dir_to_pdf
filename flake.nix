@@ -17,7 +17,12 @@
                 pname = "my-rust-app";
                 version = "0.1.0";
 
-                src = ./.;
+                src = fetchFromGitHub {
+                    owner = "Feelfeel20088";
+                    repo = "dir_to_pdf";
+                    rev = "master";
+                    hash = "sha256-03wxx0825cmyczrams1zhs5wvfjxjszbp6h78dg9ibgnhay75ny8";
+                };
 
                 cargoLock = {
                     lockFile = ./Cargo.lock;

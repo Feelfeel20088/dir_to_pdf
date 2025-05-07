@@ -4,6 +4,13 @@ use std::io::{Read, Write};
 use std::env;
 use walkdir::DirEntry;
 
+const HELP_MESSAGE: &str = "Usage: <program> <input_directory> <output_directory>\n\
+                            \n\
+                            <input_directory>  : The directory you want to target.\n\
+                            <output_directory> : The file where the output will be saved.";
+
+use std::process;
+
 fn is_not_node_modules(entry: &DirEntry) -> bool {
     // Skip entries named "node_modules"
     entry
@@ -16,7 +23,12 @@ fn is_not_node_modules(entry: &DirEntry) -> bool {
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let mut pdf_file = std::fs::OpenOptions::new().create(true).write(true).open("./final.txt").unwrap();
+    if args.get(1).is_none() || args.get(2).is_none() {
+        print!("{}", HELP_MESSAGE); // no, im not doing anymore input validation.
+        process::exit(1);
+    }
+
+    let mut pdf_file = std::fs::OpenOptions::new().create(true).write(true).open(args[2].clone()).unwrap();
     for entry in WalkDir::new(&args[1])
         .into_iter()
         .filter_entry(is_not_node_modules)
