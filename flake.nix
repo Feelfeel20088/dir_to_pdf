@@ -13,20 +13,15 @@
             inherit system;
         };
         in {
-            packages.default = pkgs.rustPlatform.buildRustPackage {
-                pname = "dir_to_pdf";
-                version = "0.1.2";
+        packages.default = pkgs.rustPlatform.buildRustPackage {
+            pname = "dir_to_pdf";
+            version = "0.1.0";
 
-                src = pkgs.fetchFromGitHub {
-                    owner = "Feelfeel20088";
-                    repo = "dir_to_pdf";
-                    rev = "b0d2ae9";
-                    hash = "sha256-FmbGEG/nCARj1oYJjHJimnXTom4VAQIT912+faFu0gg=";
-                };
+            src = ./.;
 
-                cargoLock = {
-                    lockFile = ./Cargo.lock;
-                };
+            cargoLock = {
+                lockFile = ./Cargo.lock;
             };
+        };
       });
 }
