@@ -19,9 +19,20 @@
 
             src = ./.;
 
+            nativeBuildInputs = [ pkgs.cargo ];
+
             cargoLock = {
                 lockFile = ./Cargo.lock;
             };
+
+            meta = with pkgs.lib; {
+              description = "My Rust Package";
+              license = licenses.mit;
+              platforms = platforms.all;
+            };
+
         };
+
+
       });
 }
